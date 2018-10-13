@@ -1,188 +1,183 @@
-class Int: pass
-class Bool: pass
-class Object: pass
-class DataFrame: pass
+from abc import abstractmethod, ABC
 
-@task(
-    settings_desc=Descriptor(
-        validation_size=int,
-        number_of_cv_folds=int,
-        split_dataset=bool,
-        label_encoders=object,
-        one_hot_encoders=object
-    ),
-    inputs_desc=Descriptor(
-        clean_date=DataFrame
-    ),
-    outputs_desc=Descriptor(
-        test_set=DataFrame,
-        validation_set=DataFrame,
-        full_data=DataFrame
-    ))
-def preprocess(settings, inputs):
-    pass
+from tasks.cli import SchemaArgumentParser
+from tasks.schema import Dict
 
 
-parser = cli_arg_parser(preprocess)
-writer = cli_out_writer(preprocess)
+class Task(ABC):
+    """Interface for tasks."""
 
+    @property
+    @abstractmethod
+    def settings_schema(self):
+        pass
 
+    @property
+    @abstractmethod
+    def inputs_schema(self):
+        pass
 
-# _settings_desc = "<settings>"
+    @property
+    @abstractmethod
+    def outputs_schema(self):
+        """Schema for the return value of the task."""
+        pass
 
-# _inputs_desc = "<inputs>"
+    @property
+    @abstractmethod
+    def settings(self):
+        pass
 
-# _outputs_desc = "<outputs>"
-
-class TaskException(Exception):
-    pass
-
-
-class Task:
-    def __init__(self, execute_fn, settings_desc, inputs_desc, outputs_desc):
-        """Create a new task.
-
-        :param execute_fn: The actual computation to execute.  This is a
-            function that accepts two arguments: the settings, and the inputs,
-            and return an object that conforms to the outputs descriptor.
-        :param settings_desc: A descriptor for the settings of this
-            computation.
-        :param inputs_desc: A descriptor for the inputs for the computation.
-            Note that the distinction between settings and inputs is purely
-            conceptual from the standpoint of the computation.
-        :param outputs_desc: A descriptor for the outputs of the computation.
-        """
-        self._execute_fn = execute_fn
-        self.settings_desc = settings_desc
-        self.inputs_desc = inputs_desc
-        self.outputs_desc = outputs_desc
-        self._settings = None
-
-    @classmethod
-    def new(cls, execute_fn, settings_desc, inputs_desc, outputs_desc):
-        return cls(execute_fn, settings_desc, inputs_desc, outputs_desc)
+    @abstractmethod
+    def execute(self, inputs):
+        pass
 
     def __call__(self, inputs):
-        if not self.settings:
-            raise TaskException("Need to initialize task")
-        # TODO: Add validation of inputs
-        self._execute_fn(self.settings, inputs)
+        self.settings_schema.check(self.settings)
+        self.inputs_schema.check(inputs)
+        return self.execute(inputs)
+
+
+# TODO: metaclass to force subclasses to fill in the static __attributes
+class Node(Task):
+    """Class to derive atomic tasks from.  Provides a declarative mechanism for
+    specifying the types of settings, inputs, and outputs.  The mechanism aims
+    to be concise and intuitive.
+    """
+
+    _settings_schema = None
+    _inputs_schema = None
+    _outputs_schema = None
+
+    def __init__(self):
+        self._settings = None
+
+    @property
+    def settings_schema(self):
+        return self._settings_schema
+
+    @property
+    def outputs_schema(self):
+        return self._outputs_schema
+
+    @property
+    def inputs_schema(self):
+        return self._inputs_schema
 
     @property
     def settings(self):
         return self._settings
 
     @settings.setter
-    def settings(self, value):
-        # TODO: Add validation of settings
-        self._settings = value
+    def settings(self, settings):
+        self.settings_schema.check(settings)
+        self._settings = settings
 
-    def __repr__(self):
-        return "<{}: {}({})>".format(
-            self.__class__.__name__,
-            self._execute_fn.func_name,
-            self.settings)
-
-class DescriptorProperty:
-    def __init__(self):
+    @abstractmethod
+    def execute(self, inputs):
         pass
 
 
-class Descriptor:
-    def __init__(self, **kwargs):
-        """Creates a new descriptor.
+class TaskArgumentParser(SchemaArgumentParser):
+    def __init__(self, task, *args, **kwargs):
+        self._task = task
+        super().__init__(*args, **kwargs)
+        self.add_schema(task.settings_schema, "settings")
+        self.add_schema(task.inputs_schema, "inputs")
+        self.add_schema(task.outputs_schema, "outputs")
 
-        A descriptor is a schema for key-value data.  It may serve to validate
-        data, to automatically create command line parsers, etc.
-        """
-        self._properties = {}
-        for (name, value) in kwargs.items():
-            setattr(self, name, value)
+    def parse_args(self, args=None, namespace=None):
+        parsed = vars(super().parse_args(args, namespace))
+        result = {'settings': {}, 'inputs': {}, 'outputs': {}}
 
-    def __setitem__(self, key, value):
-        if not isinstance(value, DescriptorProperty):
-            raise ValueError("'{}' should be a '{}'".format(
-                value, DescriptorProperty.__class__.__name__))
-        self._properties[key] = value
+        for name in self._task.settings_schema:
+            result['settings'][name] = parsed[name]
+        for name in self._task.inputs_schema:
+            result['inputs'][name] = parsed[name]
+        for name in self._task.outputs_schema:
+            result['outputs'][name] = parsed[name]
 
-    def __getitem__(self, key):
-        return self._properties[key]
-
-    def __iter__(self):
-        return iter(self._properties)
-
-    def items(self):
-        return self._properties.items()
-
-    def validate(self, data):
-        pass
-
-    @staticmethod
-    def merge(*descs):
-        result = Descriptor()
-        for desc in descs:
-            for (name, prop) in desc.items():
-                result[name] = prop
         return result
 
 
-task = Task.new(preprocess, _settings_desc, _inputs_desc, _outputs_desc)
-# class DescriptorArgParser(ArgParser):
-#     pass
+class Graph(Task):
+    def __init__(self, *nodes):
+        self._nodes = []
+        self._arcs = []
+        for node in nodes:
+            self.add_node(node)
+        self._cache = {}
+
+    def execute(self, inputs):
+        pass
+
+    def add_node(self, new_node, add_arcs=True):
+        if add_arcs:
+            self._add_arcs_by_io_name(new_node)
+        self._nodes.append(new_node)
+
+    @property
+    def outputs_schema(self):
+        # TODO: memoize and reset when adding new nodes
+        # TODO: construction could be more efficient
+        result = Dict()
+        for node in self._nodes:
+            for (name, parameter) in node.outputs_schema.items():
+                if not self._is_connected_to_input(name, node):
+                    result[name] = parameter
+        return result
+
+    @property
+    def inputs_schema(self):
+        # TODO: memoize and reset when adding new nodes
+        # TODO: construction could be more efficient
+        result = Dict()
+        for node in self._nodes:
+            for (name, parameter) in node.inputs_schema.items():
+                if not self._is_connected_to_output(name, node):
+                    result[name] = parameter
+        return result
+
+    @property
+    def settings_schema(self):
+        # TODO: memoize and reset when adding new nodes
+        result = Dict()
+        for node in self._nodes:
+            result.update(node.settings_schema)
+        return result
+
+    @property
+    def settings(self):
+        result = {}
+        for node in self._nodes:
+            result.update(node.settings)
+        return result
+
+    def _add_arcs_by_io_name(self, new_node):
+        # TODO: only add arcs between input and output when the type matches
+        for node in self._nodes:
+            for input_name in new_node.inputs_schema:
+                if input_name in node.outputs_schema:
+                    self._arcs.append((node, new_node, input_name))
+            for output_name in new_node.outputs_schema:
+                if output_name in node.inputs_schema:
+                    self._arcs.append((node, new_node, output_name))
+
+    def _is_connected_to_input(self, output_name, node):
+        for (src, _, name) in self._arcs:
+            if src == node and name == output_name:
+                return True
+        return False
+
+    def _is_connected_to_output(self, input_name, node):
+        for (_, dest, name) in self._arcs:
+            if dest == node and name == input_name:
+                return True
+        return False
 
 
-# def new_command_line_parser(task):
-#     pass
-
-# class Setting:
-
-#     def __init__(self, ty):
-#         pass
-
-# class Input:
-#     pass
-
-# class Output:
-#     pass
-
-# class PreprocessData(Task):
-
-#     def execute(self, inputs):
-#         pass
-
-#     validation_size = Setting(int)
-#     number_of_cv_folds = Setting(int)
-#     split_dataset = Setting(bool)
-
-#     one_hot_encoder = Input()
-#     clean_data = Input()
-#     label_encoders = Input()
-
-#     feature_labels = Output()
-#     ml_data_training = Output()
-
-#     def execute(self, **inputs):
-#         pass
-
-# @classmethod
-# def settings(self):
-#     return dict(
-#         validation_size=Setting(int),
-#         number_of_cv_folds=Setting(int),
-#         split_dataset=Setting(bool)
-#     )
-
-# pass
-
-# preprocess_cli = CommandLineJob()
-
-# def create_arg_parser(task):
-#     pass
-
-# class Composition(Task):
-
-#     def __init__(self, settings, *tasks):
-#         self._tasks = tasks
-
-#     def setting(self):
-#         pass
+def command_line_app(task):
+    parser = TaskArgumentParser(task)
+    args = parser.parse_args()
+    task.settings = args['settings']
+    print(task(args['inputs']))

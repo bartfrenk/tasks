@@ -56,7 +56,25 @@ class TaskC(Node):
 graph = Graph(TaskA(), TaskB(), TaskC())
 
 
+# This API is less verbose:
+#
+# @task(
+#     settings=Properties(
+#         complexity=Int("Complexity"),
+#         number_of_cv_folds=Int("Number of folds used for cross validation")),
+#     inputs=Properties(
+#         source=String("Source")),
+#     outputs=Properties(
+#         dest=String("Destination")))
+# def preprocess(self, inputs):
+#     pass
+#
+# Also, using a class for each task type seems overkill.
 
+
+pipeline = composite(collect, preprocess, select_features, train)
+
+to_airflow_dag(pipeline)
 
 if __name__ == "__main__":
     command_line_app(graph)

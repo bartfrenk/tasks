@@ -1,80 +1,72 @@
-from tasks.base import Node, TaskArgumentParser, command_line_app, Graph
-from tasks.schema import Dict, Int, String
+import schema as s
+
+from tasks.base import task, TaskSchema
+from tasks.composite import TaskGraph
+from tasks import cli
 
 
-class TaskA(Node):
+@task(
+    settings={
+        "number_of_cv_folds": s.Integer(
+            "Number of folds used in cross-validation"),
+        "training_set_size": s.Float(
+            "Fraction of the data set used for training")},
+    inputs={
+        "raw_data": s.DataFrame("")},
+    outputs={
+        "cleaned_data": s.DataFrame("")})
+def preprocess(settings, inputs):
+    return inputs
 
-    _settings_schema = Dict(
-        complexity=Int("The complexity settings")
-    )
-    _inputs_schema = Dict(
-        source=String("The text to process")
-    )
-    _outputs_schema = Dict(
-        trace=String("The resulting output"),
-        confidence=Int("The confidence")
-    )
+@task(
+    settings={
+        "number_of_cv_folds": s.Integer(""),
+        "training_set_size": s.Float("")},
+    inputs={
+        "cleaned_data": s.DataFrame("")},
+    outputs={
+        "model": s.DataFrame("")})
+def postprocess(settings, inputs):
+    return inputs
 
-    def execute(self, inputs):
-        return {"trace": self.settings["complexity"] * inputs["source"]}
-
-
-
-class TaskB(Node):
-
-    _settings_schema = Dict()
-    _inputs_schema = Dict(
-        trace=String("The input")
-    )
-    _outputs_schema = Dict(
-        xxx=String("Output")
-    )
-
-    def execute(self, inputs):
-        return {"xxx": inputs["trace"]}
-
-graph = Graph(TaskA(), TaskB())
-
-
-class TaskC(Node):
-
-    _settings_schema = Dict(
-        saliency=Int("The saliency")
-    )
-    _inputs_schema = Dict(
-        trace=String("The input"),
-        xxx=String("Another input"),
-        foo=Int("A foo")
-    )
-    _outputs_schema = Dict(
-        yyy=String("Output")
-    )
-
-    def execute(self, inputs):
-        return {"xxx": inputs["trace"] + str(self.settings["saliency"])}
-
-graph = Graph(TaskA(), TaskB(), TaskC())
+@task(
+    settings={
+        "core": {"host": s.Text("Core host"),
+                 "port": s.Int("Core port")}},
+    inputs={
+        "sql": s.Text("The query to execute")},
+    outputs={
+        "raw_data": s.DataFrame("The raw data")})
+def extract_data(settings, inputs):
+    pass
 
 
-# This API is less verbose:
-#
-# @task(
-#     settings=Properties(
-#         complexity=Int("Complexity"),
-#         number_of_cv_folds=Int("Number of folds used for cross validation")),
-#     inputs=Properties(
-#         source=String("Source")),
-#     outputs=Properties(
-#         dest=String("Destination")))
-# def preprocess(self, inputs):
-#     pass
-#
-# Also, using a class for each task type seems overkill.
+@task(
+    settings={
+        "backend": {"host": s.Text("Host running the backend"),
+                    "port": s.Int("Port on which the backend listens")
+                    }},
+    inputs={},
+    outputs={"sql": s.Text("The resulting query")})
+def make_query(settings, inputs):
+    pass
 
 
-pipeline = composite(collect, preprocess, select_features, train)
+sch = TaskSchema.empty()
 
-to_airflow_dag(pipeline)
+sch.append(preprocess.schema, key="preprocess")
+sch.append(postprocess.schema, key="postprocess")
+
+
+res = preprocess.execute(
+    {"number_of_cv_folds": 1,
+     "training_set_size": 0.5},
+    {"raw_data": "hello"})
+
+graph = TaskGraph(preprocess, postprocess)
+
 
 if __name__ == "__main__":
-    command_line_app(graph)
+    parser = cli.new_parser(graph.schema)
+    arguments = parser.parse_args()
+    print(arguments)

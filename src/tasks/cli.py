@@ -1,28 +1,28 @@
 from argparse import ArgumentParser
 
 
-class SchemaArgumentParser(ArgumentParser):
+def new_parser(task_schema, *args, **kwargs):
+    parser = ArgumentParser(*args, **kwargs)
+    _add_schema_to_group(parser, "settings", task_schema.settings)
+    _add_schema_to_group(parser, "inputs", task_schema.inputs)
+    _add_schema_to_group(parser, "outputs", task_schema.outputs)
+    return parser
 
-    def add_schema(self, schema, section=None):
-        if not hasattr(schema, "properties"):
-            raise ValueError("Schema should have a properties attribute")
 
-        if section is None:
-            group = self
-        else:
-            group = self.add_argument_group(section)
+def _add_schema_to_group(parser, group_name, schema):
+    group = parser.add_argument_group(group_name)
 
-        for (name, parameter) in schema.properties.items():
-            self._add_parameter(group, name, parameter)
+    def recur(schema_, prefix):
 
-    def _add_parameter(self, group, name, parameter):
-        option = self._long_option(name)
-        group.add_argument(
-            option,
-            type=parameter.python_type,
-            help=parameter.description,
-            metavar=parameter.python_type.__name__)
+        if hasattr(schema_, "ty") and hasattr(schema_, "description"):
+            group.add_argument(
+                "--{}".format(".".join(prefix)),
+                type=schema_.ty,
+                help=schema_.description,
+                metavar="<{}>".format(schema_.ty.__name__))
+        if isinstance(schema_, dict):
+            for (name, nested_schema) in schema_.items():
+                recur(nested_schema, prefix + [name])
 
-    def _long_option(self, name):
-        # pylint: disable=no-self-use
-        return "--{}".format(name)
+    recur(schema, [])
+    return group

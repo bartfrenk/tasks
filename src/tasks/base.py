@@ -3,6 +3,10 @@ from abc import abstractmethod, ABC
 import schema as s
 
 
+class ExecutionError(Exception):
+    pass
+
+
 class Task(ABC):
     @abstractmethod
     def execute(self, settings, inputs, **context):

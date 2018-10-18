@@ -16,7 +16,7 @@ from tasks import cli
     outputs={
         "cleaned_data": s.DataFrame("")})
 def preprocess(settings, inputs):
-    return inputs
+    return {"cleaned_data": inputs["raw_data"]}
 
 @task(
     settings={
@@ -27,12 +27,12 @@ def preprocess(settings, inputs):
     outputs={
         "model": s.DataFrame("")})
 def postprocess(settings, inputs):
-    return inputs
+    return {"model": inputs["cleaned_data"]}
 
 @task(
     settings={
         "core": {"host": s.Text("Core host"),
-                 "port": s.Int("Core port")}},
+                 "port": s.Integer("Core port")}},
     inputs={
         "sql": s.Text("The query to execute")},
     outputs={
@@ -44,7 +44,7 @@ def extract_data(settings, inputs):
 @task(
     settings={
         "backend": {"host": s.Text("Host running the backend"),
-                    "port": s.Int("Port on which the backend listens")
+                    "port": s.Integer("Port on which the backend listens")
                     }},
     inputs={},
     outputs={"sql": s.Text("The resulting query")})
@@ -58,12 +58,21 @@ sch.append(preprocess.schema, key="preprocess")
 sch.append(postprocess.schema, key="postprocess")
 
 
-res = preprocess.execute(
-    {"number_of_cv_folds": 1,
-     "training_set_size": 0.5},
-    {"raw_data": "hello"})
-
 graph = TaskGraph(preprocess, postprocess)
+inputs ={"raw_data": "hello"}
+settings = {
+    "preprocess": {
+        "number_of_cv_folds": 1,
+        "training_set_size": 0.5},
+    "postprocess": {
+        "number_of_cv_folds": 1,
+        "training_set_size": 0.5}}
+
+def f():
+    try:
+        return graph.execute(settings, inputs)
+    except Exception as exc:
+        print(exc)
 
 
 if __name__ == "__main__":

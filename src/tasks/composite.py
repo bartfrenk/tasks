@@ -1,6 +1,6 @@
 from graph import DirectedGraph
 
-from tasks.base import Task, TaskSchema, ExecutionError
+from tasks.base import Task, TaskSchema
 
 
 class TaskGraph(Task):
@@ -51,7 +51,7 @@ class TaskGraph(Task):
         self._label = value
 
     @property
-    def tasks(self):
+    def subtasks(self):
         return self._graph.nodes
 
     @property
@@ -62,36 +62,5 @@ class TaskGraph(Task):
     def schema(self):
         return self._schema
 
-    # TODO: Need to abstract over cache to allow for consumption of inputs
-    def execute(self, settings, inputs, **context):
-        cache = inputs
-        unfinished = self._graph.nodes
-        while unfinished:
-            try:
-                current = next(task for task in unfinished
-                               if self._inputs_available(cache, task))
-                task_output = self._execute_task(settings, cache, current, **context)
-                cache.update(task_output)
-                unfinished.remove(current)
-            except StopIteration:
-                raise ExecutionError("Could not execute graph")
-        return cache
-
-    @staticmethod
-    def _execute_task(settings, cache, task, **context):
-        task_settings = settings[task.label]
-        task_inputs = select_keys(cache, task.schema.inputs.keys())
-        return task.execute(task_settings, task_inputs, **context)
-
-    @staticmethod
-    def _inputs_available(cache, task):
-        return all(name in cache for name in task.schema.inputs)
-
-    def _dependencies_by_label(self, label):
-        for arc in self._graph.arcs:
-            if arc.label == label:
-                yield arc
-
-
-def select_keys(dct, keys):
-    return {k: dct[k] for k in keys}
+    def __repr__(self):
+        return f"<{self._label}>"

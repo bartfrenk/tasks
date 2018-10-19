@@ -1,9 +1,12 @@
+import logging
+import sys
+
 import schema as s
 
 from tasks.base import task, TaskSchema
 from tasks.composite import TaskGraph
 from tasks import cli
-
+import tasks.executor as ex
 
 @task(
     settings={
@@ -54,8 +57,7 @@ def make_query(settings, inputs):
 
 sch = TaskSchema.empty()
 
-sch.append(preprocess.schema, key="preprocess")
-sch.append(postprocess.schema, key="postprocess")
+executor = ex.SequentialExecutor(ex.InMemoryChannel())
 
 
 graph = TaskGraph(preprocess, postprocess)
@@ -67,11 +69,20 @@ settings = {
     "postprocess": {
         "number_of_cv_folds": 1,
         "training_set_size": 0.5}}
+graph.label = "TestTaskGraph"
+
+ex.log.setLevel(logging.INFO)
+if not ex.log.hasHandlers():
+    stream = logging.StreamHandler(sys.stdout)
+    stream.setLevel(logging.INFO)
+    ex.log.addHandler(stream)
+
+
 
 def f():
     try:
-        return graph.execute(settings, inputs)
-    except Exception as exc:
+        return executor.execute(graph, settings, inputs)
+    except ex.ExecutionException as exc:
         print(exc)
 
 

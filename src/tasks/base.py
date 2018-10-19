@@ -8,9 +8,6 @@ class ExecutionError(Exception):
 
 
 class Task(ABC):
-    @abstractmethod
-    def execute(self, settings, inputs, **context):
-        pass
 
     @property
     @abstractmethod
@@ -21,9 +18,6 @@ class Task(ABC):
     @abstractmethod
     def label(self):
         pass
-
-    def __call__(self, settings, inputs):
-        self.execute(settings, inputs)
 
 
 class SimpleTask(Task):
@@ -40,7 +34,7 @@ class SimpleTask(Task):
     def label(self):
         return self._label
 
-    def execute(self, settings, inputs, **context):
+    def run(self, settings, inputs, **context):
         s.check(self.schema.settings, settings)
         s.check(self.schema.inputs, inputs)
         return self._execute(settings, inputs, **context)

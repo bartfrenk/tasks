@@ -6,7 +6,9 @@ import schema as s
 from tasks.base import task, TaskSchema
 from tasks.composite import TaskGraph
 from tasks import cli
-import tasks.executor as ex
+import tasks.executors as ex
+import tasks.channels as ch
+
 
 @task(
     settings={
@@ -33,42 +35,38 @@ def postprocess(settings, inputs):
     return {"model": inputs["cleaned_data"]}
 
 @task(
-    settings={
-        "core": {"host": s.Text("Core host"),
-                 "port": s.Integer("Core port")}},
+    settings={},
     inputs={
         "sql": s.Text("The query to execute")},
     outputs={
         "raw_data": s.DataFrame("The raw data")})
 def extract_data(settings, inputs):
-    pass
+    return {"raw_data": "xxx"}
 
 
 @task(
     settings={
         "backend": {"host": s.Text("Host running the backend"),
-                    "port": s.Integer("Port on which the backend listens")
-                    }},
+                    "port": s.Integer("Port on which the backend listens")}},
     inputs={},
     outputs={"sql": s.Text("The resulting query")})
 def make_query(settings, inputs):
-    pass
+    return {"sql": "select * from table"}
 
 
-sch = TaskSchema.empty()
-
-executor = ex.SequentialExecutor(ex.InMemoryChannel())
-
-
-graph = TaskGraph(preprocess, postprocess)
-inputs ={"raw_data": "hello"}
+executor = ex.SequentialExecutor(ch.InMemoryChannel())
+graph = TaskGraph(extract_data, make_query, preprocess, postprocess)
+inputs = {}
 settings = {
     "preprocess": {
         "number_of_cv_folds": 1,
         "training_set_size": 0.5},
     "postprocess": {
         "number_of_cv_folds": 1,
-        "training_set_size": 0.5}}
+        "training_set_size": 0.5},
+    "make_query": {
+        "backend": {"host": "localhost",
+                    "port": 1234}}}
 graph.label = "TestTaskGraph"
 
 ex.log.setLevel(logging.INFO)

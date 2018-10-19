@@ -1,85 +1,11 @@
 import logging
-from abc import ABC, abstractmethod
+
 import schema
 
-
-class ExecutionException(Exception):
-    pass
-
-
-class Channel(ABC):
-    """Interface for the communication mechanism between tasks."""
-    @abstractmethod
-    def put(self, name, data, consumers):
-        pass
-
-    @abstractmethod
-    def take(self, name, consumer=None):
-        """Attempts to take the named data from the channel for the consumer.
-
-        :raises KeyError: When the channel does not contain the named data for the consumer.
-        """
-        pass
-
-    @abstractmethod
-    def has(self, name, consumer=None):
-        """
-        Check whether the channel has named data to be used by the consumer.
-        Set consumer to None to just check whether the named data exists in the
-        channel.
-        """
-        pass
-
-    def select(self, names, consumer=None):
-        """Take named data from the channel for the specified consumer.  Does
-        not change the state of the channel when consumer is set to None.
-
-        :returns: A dict mapping names to their associated data.
-        """
-        result = {}
-        for name in names:
-            try:
-                result[name] = self.take(name, consumer)
-            except KeyError:
-                pass
-        return result
-
-    def __contains__(self, name):
-        return self.has(name)
-
-class InMemoryChannel(Channel):
-
-    def __init__(self):
-        self._data = {}
-
-    def put(self, name, data, consumers):
-        self._data[name] = {"data": data, "consumers": consumers}
-
-    def has(self, name, consumer=None):
-        return "consumers" in self._data.get(name, {}) and \
-            (consumer is None or consumer in self._data[name]["consumers"])
-
-    def take(self, name, consumer=None):
-        if not self.has(name, consumer):
-            raise KeyError(f"Channel does not contain {name} for {consumer}")
-        data = self._data[name]["data"]
-        if consumer is not None:
-            self._data[name]["consumers"].remove(consumer)
-            if not self._data[name]["consumers"]:
-                del self._data[name]
-        return data
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__}({repr(self._data)})>"
-
-class Executor(ABC):
-    """Interface for executors."""
-
-    @abstractmethod
-    def execute(self, task, settings, inputs, **context):
-        pass
+from tasks.executors.base import Executor, ExecutionException
 
 log = logging.getLogger(__name__)
+
 
 class SequentialExecutor(Executor):
     """Executor that runs the subtasks of a task in sequence."""
@@ -142,7 +68,7 @@ class SequentialExecutor(Executor):
         names = subtask.schema.inputs.keys()
         inputs = self._channel.select(names, subtask)
 
-        return subtask.run(settings[subtask.label], inputs, **context)
+        return subtask.run(settings.get(subtask.label, {}), inputs, **context)
 
     def _get_consumers(self, name, _data):
         """Return a list of all consumers of the named data."""

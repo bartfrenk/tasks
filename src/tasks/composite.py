@@ -40,7 +40,8 @@ class TaskGraph(Task):
                 self._schema.outputs[name] = schema
 
     def _extend_settings(self, task):
-        self._schema.settings[task.label] = task.schema.settings
+        if task.schema.settings:
+            self._schema.settings[task.label] = task.schema.settings
 
     @property
     def label(self):

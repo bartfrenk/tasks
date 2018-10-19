@@ -89,6 +89,6 @@ def f():
 
 
 if __name__ == "__main__":
-    parser = cli.new_parser(graph.schema)
+    parser = cli.new_parser(graph)
     arguments = parser.parse_args()
     print(arguments)

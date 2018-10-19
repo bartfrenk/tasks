@@ -69,11 +69,15 @@ settings = {
                     "port": 1234}}}
 graph.label = "TestTaskGraph"
 
+stream = logging.StreamHandler(sys.stdout)
+stream.setLevel(logging.INFO)
+
 ex.log.setLevel(logging.INFO)
 if not ex.log.hasHandlers():
-    stream = logging.StreamHandler(sys.stdout)
-    stream.setLevel(logging.INFO)
     ex.log.addHandler(stream)
+ch.log.setLevel(logging.INFO)
+if not ch.log.hasHandlers():
+    ch.log.addHandler(stream)
 
 
 

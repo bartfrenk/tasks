@@ -1,5 +1,3 @@
 # pylint: disable=unused-import
 from .base import Channel
-from .simple import InMemoryChannel
-
-
+from .in_memory import InMemoryChannel, log

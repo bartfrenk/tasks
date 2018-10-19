@@ -1,4 +1,9 @@
+import logging
+
 from tasks.channels.base import Channel
+
+
+log = logging.getLogger(__name__)
 
 
 class InMemoryChannel(Channel):
@@ -7,6 +12,7 @@ class InMemoryChannel(Channel):
         self._data = {}
 
     def put(self, name, data, consumers):
+        log.info("Storing %s for consumers %s", name, consumers)
         self._data[name] = {"data": data, "consumers": consumers}
 
     def has(self, name, consumer=None):
@@ -18,9 +24,12 @@ class InMemoryChannel(Channel):
             raise KeyError(f"Channel does not contain {name} for {consumer}")
         data = self._data[name]["data"]
         if consumer is not None:
+            log.info("Data %s consumed by %s", name, consumer)
             self._data[name]["consumers"].remove(consumer)
             if not self._data[name]["consumers"]:
                 del self._data[name]
+        else:
+            log.info("Retrieving data %s", name)
         return data
 
     def __repr__(self):

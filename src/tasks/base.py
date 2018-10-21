@@ -8,7 +8,6 @@ class ExecutionError(Exception):
 
 
 class Task(ABC):
-
     @property
     @abstractmethod
     def schema(self):

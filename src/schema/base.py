@@ -1,92 +1,73 @@
-from abc import ABC, abstractmethod
-from functools import partial
-from datetime import datetime
+"""
+Wrapper for the pydantic library.  Adds minimal functionality, and tweaks settings to
+our use case.
+"""
+
+# YAPF does not yet support 3.6 type hint syntax
+# Local Variables:
+# eval: (yapf-mode -1)
+# End:
+
+import pydantic
+# pylint: disable=unused-import
+from pydantic import ValidationError
+
+from utils.conversions import snake_to_camel
+
+__all__ = ["fields", "BaseConfig", "BaseModel", "Schema"]
 
 
-class ValidationFailure(Exception):
-    pass
+def fields(model):
+    return model.__fields__
 
 
-def check(schema, data):
-    if hasattr(schema, "check"):
-        schema.check(data)
-    if isinstance(schema, dict):
-        for key in schema:
-            if not isinstance(data, dict):
-                raise ValidationFailure("Expected a dictionary")
-            if not key in data:
-                raise ValidationFailure(f"Expected key: {key}")
-            check(schema[key], data[key])
+class BaseConfig(pydantic.BaseConfig):
+    allow_population_by_alias = True
+    derive_alias = snake_to_camel
+    validate_all = True
+    arbitrary_types_allowed = True
+
+    @classmethod
+    def get_field_schema(cls, name):
+        field_config = cls.fields.get(name) or {}
+
+        if 'alias' not in field_config and callable(cls.derive_alias):
+            field_config['alias'] = cls.derive_alias(name)
+
+        return field_config
 
 
-class AtomicType(ABC):
-
-    @abstractmethod
-    def parser(self, **settings):
-        pass
-
-    @property
-    @abstractmethod
-    def data_type(self):
-        pass
-
-    @property
-    @abstractmethod
-    def description(self):
-        pass
-
-    @abstractmethod
-    def check(self, data):
-        if not isinstance(data, self.data_type):
-            raise ValidationFailure(f"Expected value of type: {self.data_type}")
+class BaseModel(pydantic.BaseModel):
+    Config = BaseConfig
 
 
-class SimpleType(AtomicType):
-
-    def __init__(self, data_type, make_parser=None, description=None, default=None):
-        self._data_type = data_type
-        self._default = default
-        self._make_parser = make_parser or (lambda: self._data_type)
-        self._description = description
-
-    def check(self, data):
-        if not isinstance(data, self._data_type):
-            raise ValidationFailure(f"Expected value of type: {self.data_type}")
-
-    @property
-    def data_type(self):
-        return self._data_type
-
-    def parser(self, **settings):
-        return self._make_parser(**settings)
-
-    @property
-    def description(self):
-        return self._description or ""
+class Schema(pydantic.Schema):
+    def __init__(self, **kwargs):
+        if "default" not in kwargs:
+            super().__init__(None, **kwargs)
+        else:
+            super().__init__(**kwargs)
 
 
-def datetime_parser(fmt="%Y%m%dT%H%M%S"):
-    def fn(data):
-        return datetime.strptime(data, fmt)
-    return fn
+class BoolError(pydantic.errors.PydanticTypeError):
+    msg_template = 'value is not a valid bool'
 
-def new_simple_type(ty, new_parser=None):
-    return partial(SimpleType, ty, new_parser)
 
-Float = new_simple_type(float)
-Integer = new_simple_type(int)
-String = new_simple_type(str)
-Datetime = new_simple_type(datetime, datetime_parser)
+def _bool_validator(v) -> bool:
+    if isinstance(v, bool):
+        return v
+    raise BoolError()
 
-DataFrame = new_simple_type(str)
-Text = new_simple_type(str)
 
-## Where to inject the parsers? Note that these parsers might have complicated
-## effects if we require that the end result of a parser is an instance of
-## data_type: consider the case of specifying a DataFrame by an S3 URL. In the
-## latter case it is not even possible to inject the parser in the schema, since
-## the base URL might depend on many things.
-##
-## Why, maybe they should not even be called parsers. Or they might be split up
-## in a parsing bit (which belongs with the types, and is not effectful), and an
-## application-dependent bit (possibly, effectful).
+def _set_strict_validators():
+    # pylint: disable=protected-access
+    alist_replace(pydantic.validators._VALIDATORS, bool, [_bool_validator])
+
+
+def alist_replace(alist, key, value):
+    for (i, (k, _)) in enumerate(alist):
+        if key == k:
+            alist[i] = (key, value)
+
+
+_set_strict_validators()

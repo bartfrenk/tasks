@@ -1,4 +1,3 @@
-
 class SchemaParser:
     """
     Command line argument parser that outputs data matching a schema.  The
@@ -31,14 +30,11 @@ class SchemaParser:
 
             if hasattr(root, "data_type") and hasattr(root, "description"):
                 settings = self._settings.get(root.data_type, {})
-                try:
-                    group.add_argument("--{}".format(".".join(prefix)),
-                                    type=root.parser(**settings),
-                                    help=root.description,
-                                    metavar="<{}>".format(root.data_type.__name__))
-                except Exception as e:
-                    import pdb; pdb.set_trace()
-                    x = 1
+                group.add_argument(
+                    "--{}".format(".".join(prefix)),
+                    type=root.parser(**settings),
+                    help=root.description,
+                    metavar="<{}>".format(root.data_type.__name__))
 
             if isinstance(root, dict):
                 for (name, child) in root.items():
@@ -48,3 +44,30 @@ class SchemaParser:
 
     def parse_args(self, *args, **kwargs):
         return self.parser.parse_args(*args, **kwargs)
+
+
+class ModelParser:
+    def __init__(self, parser):
+        self.parser = parser
+
+    def add_model(self, schema, section=None):
+        if section:
+            group = self.parser.add_argument_group(section)
+        else:
+            group = self.parser
+
+        def recur(root, prefix):
+
+            if hasattr(root, "data_type") and hasattr(root, "description"):
+                settings = self._settings.get(root.data_type, {})
+                group.add_argument(
+                    "--{}".format(".".join(prefix)),
+                    type=root.parser(**settings),
+                    help=root.description,
+                    metavar="<{}>".format(root.data_type.__name__))
+
+            if isinstance(root, dict):
+                for (name, child) in root.items():
+                    recur(child, prefix + [name])
+
+        recur(schema, [])

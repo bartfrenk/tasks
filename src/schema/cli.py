@@ -1,3 +1,7 @@
+"""
+Create command line argument parsers from a list of schemas.
+"""
+
 import argparse
 from typing import Mapping, Any
 
@@ -9,8 +13,8 @@ from schema.base import fields, description
 class SchemaParser:
     def __init__(self, parser=None, by_alias=True):
         self.parser = parser or argparse.ArgumentParser()
-        self._schemas = []
         self._by_alias = by_alias
+        self._schemas = []
 
     def add_schema(self, schema, section=None):
         if section:
@@ -29,7 +33,6 @@ class SchemaParser:
                         type=_get_field_parser(root),
                         metavar="<{}>".format(root.type_.__name__))
 
-
             if hasattr(root, "fields"):
                 for (name, child) in fields(root).items():
                     if self._by_alias:
@@ -40,7 +43,7 @@ class SchemaParser:
         recur(schema, [])
         self._schemas.append(schema)
 
-    def parse_schemas(self, args=None):
+    def parse(self, args=None):
         """
         :raises ValidationError:
         """

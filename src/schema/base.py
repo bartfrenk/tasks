@@ -8,17 +8,15 @@ our use case.
 # eval: (yapf-mode -1)
 # End:
 
+from typing import Dict
+
 import pydantic
-# pylint: disable=unused-import
 from pydantic import ValidationError
 
 from utils.conversions import snake_to_camel
+from utils import alist
 
-__all__ = ["fields", "BaseConfig", "BaseModel", "Schema"]
-
-
-def fields(model):
-    return model.__fields__
+__all__ = ["fields", "BaseConfig", "BaseModel", "Schema", "ValidationError"]
 
 
 class BaseConfig(pydantic.BaseConfig):
@@ -49,6 +47,23 @@ class Schema(pydantic.Schema):
             super().__init__(**kwargs)
 
 
+class Setting(BaseModel):
+    hello: int
+
+
+class Config(BaseModel):
+    sett: Setting
+    hello: int
+
+
+def fields(model: BaseModel) -> Dict[str, pydantic.fields.Field]:
+    return model.__fields__
+
+
+def is_model(v) -> bool:
+    return isinstance(v, BaseModel)
+
+
 class BoolError(pydantic.errors.PydanticTypeError):
     msg_template = 'value is not a valid bool'
 
@@ -61,13 +76,7 @@ def _bool_validator(v) -> bool:
 
 def _set_strict_validators():
     # pylint: disable=protected-access
-    alist_replace(pydantic.validators._VALIDATORS, bool, [_bool_validator])
-
-
-def alist_replace(alist, key, value):
-    for (i, (k, _)) in enumerate(alist):
-        if key == k:
-            alist[i] = (key, value)
+    alist.update(pydantic.validators._VALIDATORS, bool, [_bool_validator])
 
 
 _set_strict_validators()

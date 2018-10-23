@@ -1,14 +1,16 @@
+import argparse
 from typing import Mapping, Any
 
 from structures.tree import Tree
 
-from schema.base import fields
+from schema.base import fields, description
 
 
 class SchemaParser:
-    def __init__(self, parser):
-        self.parser = parser
+    def __init__(self, parser=None, by_alias=True):
+        self.parser = parser or argparse.ArgumentParser()
         self._schemas = []
+        self._by_alias = by_alias
 
     def add_schema(self, schema, section=None):
         if section:
@@ -21,16 +23,19 @@ class SchemaParser:
                 if hasattr(root.type_, "fields"):
                     recur(root.type_, prefix)
                 else:
-                    # TODO: add description field
                     group.add_argument(
                         "--{}".format(".".join(prefix)),
-                        type=_get_type_parser(root.type_),
+                        help=description(root),
+                        type=_get_field_parser(root),
                         metavar="<{}>".format(root.type_.__name__))
 
 
             if hasattr(root, "fields"):
                 for (name, child) in fields(root).items():
-                    recur(child, prefix + [name])
+                    if self._by_alias:
+                        recur(child, prefix + [child.alias])
+                    else:
+                        recur(child, prefix + [name])
 
         recur(schema, [])
         self._schemas.append(schema)
@@ -53,19 +58,19 @@ class SchemaParser:
             tree[name.split(".")] = value
         return tree
 
-    @classmethod
-    def _make_instance(cls, schema, tree):
+    def _make_instance(self, schema, tree):
         data = {}
         for (name, child) in fields(schema).items():
+            key = child.alias if self._by_alias else name
             if hasattr(child.type_, "fields"):
-                data[name] = cls._make_instance(child.type_, tree[name])
+                data[key] = self._make_instance(child.type_, tree[key])
             else:
-                data[name] = tree[name]
+                data[key] = tree[key]
         return schema(**data)
 
 
 _TYPE_PARSERS: Mapping[Any, Any] = {}
 
 
-def _get_type_parser(type_):
-    return _TYPE_PARSERS.get(type_, type_)
+def _get_field_parser(field):
+    return _TYPE_PARSERS.get(field.type_, field.type_)

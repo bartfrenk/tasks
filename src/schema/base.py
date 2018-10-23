@@ -8,7 +8,7 @@ our use case.
 # eval: (yapf-mode -1)
 # End:
 
-from typing import Dict
+from typing import Dict, Optional
 
 import pydantic
 from pydantic import ValidationError
@@ -58,6 +58,22 @@ class Config(BaseModel):
 
 def fields(model: BaseModel) -> Dict[str, pydantic.fields.Field]:
     return model.__fields__
+
+
+def get_nested_attrs(x, attrs, default=None):
+    head, *rest = attrs
+    if not rest:
+        return getattr(x, head, default)
+    if not hasattr(x, head):
+        return default
+    return get_nested_attrs(getattr(x, head), rest, default)
+
+
+def description(field: pydantic.fields.Field) -> Optional[str]:
+    extra = get_nested_attrs(field, ["_schema", "extra"])
+    if not isinstance(extra, dict):
+        return None
+    return extra.get("description")
 
 
 def is_model(v) -> bool:

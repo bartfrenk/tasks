@@ -1,4 +1,5 @@
-from wrap.validation import BaseModel, ValidationError, Schema
+from schema.base import BaseModel, Schema, ValidationError
+from schema.cli import SchemaParser
 
 
 
@@ -17,7 +18,17 @@ class Settings(BaseModel):
 #     print(exc)
 
 
-s = Settings.parse_obj({"number_of_cv_folds": 1,
-                        "training_fraction": 0.5,
-                        "split_dataset": True,
-                        "hello": False})
+# s = Settings.parse_obj({"number_of_cv_folds": 1,
+#                         "training_fraction": 0.5,
+#                         "split_dataset": True,
+#                         "hello": False})
+
+
+if __name__ == "__main__":
+    parser = SchemaParser(by_alias=False)
+    parser.add_schema(Settings)
+    try:
+        s = parser.parse_schemas()
+        print(s)
+    except ValidationError as exc:
+        print(exc)

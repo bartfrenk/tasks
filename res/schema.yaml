@@ -1,0 +1,23 @@
+meta:
+  id: urn:ghg:ai:spec:task:bidwiser:clean-data:v1
+  label: clean-data
+data:
+  settings:
+    - name: date-start
+      type: int
+    - name: date-end
+      type: int
+    - name: advertiser-id
+      type: int
+    - name: seats
+      type: int
+      description: The ID of the AppNexus seat
+    - name: campaign-id
+      type: int
+  inputs:
+    - name: raw-data
+      type: str
+  outputs:
+    - name: cleaned-data
+      type: str
+  errors:

@@ -1,1 +1,2 @@
 pydantic==0.14
+pyyaml==3.13

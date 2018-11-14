@@ -1,50 +1,74 @@
+from argparse import ArgumentParser
+from structures.tree import Tree
+
+
+def register_property_parser(type_, parser):
+    _PROPERTY_PARSERS[type_] = parser
+
 
 class SchemaParser:
-    """
-    Command line argument parser that outputs data matching a schema.  The
-    parser is configured by supplying it with a collection of schemas (via
-    :func:`~SchemaParser.add_schema`).
-    """
+    def __init__(self, schema):
+        self._check_schema(schema)
+        self._schema = schema
+        self._parser = self._make_arg_parser(schema["data"])
 
-    def __init__(self, parser, settings=None):
-        """Create an instance, based on an existing command line parser.
+    def parse(self, args=None):
+        arguments = vars(self._parser.parse_args(args))
+        return self._make_tree(arguments)
 
-        :param parser: The underlying parser.  It should conform to the
-            interface of :class:`~argparse.ArgumentParser`.
-        """
-        self.parser = parser
-        self._settings = settings or {}
+    @classmethod
+    def _make_tree(cls, arguments):
+        tree = Tree()
+        for (name, value) in arguments.items():
+            tree[name.split(".")] = value
+        return tree
 
-    def add_schema(self, schema, section=None):
-        """Add schema to the argument parser.
+    def _check_schema(self, schema):
+        pass  # TODO: check this against a JSON spec
 
-        :param section: Add the schema parser in a separate group with this
-            name.
-        """
+    def _make_arg_parser(self, data):
 
-        if section:
-            group = self.parser.add_argument_group(section)
-        else:
-            group = self.parser
+        parser = ArgumentParser()
 
-        def recur(root, prefix):
-
-            if hasattr(root, "data_type") and hasattr(root, "description"):
-                settings = self._settings.get(root.data_type, {})
-                try:
-                    group.add_argument("--{}".format(".".join(prefix)),
-                                    type=root.parser(**settings),
-                                    help=root.description,
-                                    metavar="<{}>".format(root.data_type.__name__))
-                except Exception as e:
-                    import pdb; pdb.set_trace()
-                    x = 1
-
+        def recur(prefix, root):
             if isinstance(root, dict):
-                for (name, child) in root.items():
-                    recur(child, prefix + [name])
+                if "name" in root and "type" in root:
+                    opt = self._make_opt(prefix, root)
+                    parser.add_argument(opt, **self._make_argument(root))
+                else:
+                    for (name, child) in root.items():
+                        recur(prefix + [name], child)
+            if isinstance(root, list):
+                for child in root:
+                    recur(prefix, child)
 
-        recur(schema, [])
+        recur([], data)
 
-    def parse_args(self, *args, **kwargs):
-        return self.parser.parse_args(*args, **kwargs)
+        return parser
+
+    def _make_opt(self, prefix, root):
+        # pylint: disable=no-self-use
+        # TODO: Change - to _
+        opt = ".".join(prefix + [root["name"]])
+        return f"--{opt}"
+
+    def _make_argument(self, root):
+        return {
+            "help": root.get("description"),
+            "type": self._make_property_parser(root),
+            "metavar": "<{}>".format(root["type"])
+        }
+
+    def _make_property_parser(self, root):
+        # pylint: disable=no-self-use
+        type_ = root["type"]
+        if type_ in _PROPERTY_PARSERS:
+            return _PROPERTY_PARSERS[type_]
+        raise ValueError(f"No property parser registered for {type_}")
+
+    def __repr__(self):
+        return "<{}({})>".format(self.__class__.__name__,
+                                 self._schema["meta"]["id"])
+
+
+_PROPERTY_PARSERS = {"int": int, "float": float, "str": lambda x: x}
